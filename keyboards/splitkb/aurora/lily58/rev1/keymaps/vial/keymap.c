@@ -36,9 +36,53 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
 #ifdef ENCODER_MAP_ENABLE
 const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
-    [0] = { ENCODER_CCW_CW(KC_VOLD, KC_VOLU), ENCODER_CCW_CW(KC_PGUP, KC_PGDN) },
+    [0] = { ENCODER_CCW_CW(KC_VOLD, KC_VOLU), ENCODER_CCW_CW(KC_MS_WH_UP, KC_MS_WH_DOWN) },
     [1] = { ENCODER_CCW_CW(_______, _______), ENCODER_CCW_CW(_______, _______) },
     [2] = { ENCODER_CCW_CW(_______, _______), ENCODER_CCW_CW(_______, _______) },
     [3] = { ENCODER_CCW_CW(_______, _______), ENCODER_CCW_CW(_______, _______) },
 };
 #endif
+
+// Define constants
+#define RGB_IDLE_TIMEOUT 30000 // 30 seconds
+#define RGB_IDLE_BRIGHTNESS 64 // About 20% of 128 = ~25
+#define RGB_NORMAL_BRIGHTNESS 128 // Normal brightness
+
+// Global variables
+static uint16_t rgb_timer = 0;
+static bool is_rgb_dimmed = false;
+
+void keyboard_post_init_user(void) {
+    // Initialize RGB Matrix to static green at normal brightness
+    rgb_matrix_enable_noeeprom();
+    rgb_matrix_mode_noeeprom(RGB_MATRIX_SOLID_COLOR);
+    rgb_matrix_sethsv_noeeprom(HSV_GREEN);
+    rgb_timer = timer_read();
+}
+
+void housekeeping_task_user(void) {
+    // Check if keyboard has been idle
+    if (!is_rgb_dimmed && timer_elapsed(rgb_timer) > RGB_IDLE_TIMEOUT) {
+        // First change to cycle all effect
+        rgb_matrix_mode_noeeprom(RGB_MATRIX_CYCLE_LEFT_RIGHT);
+        // Then set brightness without changing hue/saturation
+        // Use the current HSV values but change only the Value (brightness)
+        rgb_matrix_set_speed_noeeprom(64);
+        rgb_matrix_sethsv_noeeprom(255, 255, RGB_IDLE_BRIGHTNESS);
+        is_rgb_dimmed = true;
+    }
+}
+
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    if (record->event.pressed) {
+        // Any key press resets the timer and restores static green
+        rgb_timer = timer_read();
+        if (is_rgb_dimmed) {
+            // Change back to static color
+            rgb_matrix_mode_noeeprom(RGB_MATRIX_SOLID_COLOR);
+            rgb_matrix_sethsv_noeeprom(HSV_GREEN);
+            is_rgb_dimmed = false;
+        }
+    }
+    return true;
+}
